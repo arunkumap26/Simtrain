@@ -439,8 +439,12 @@ public sealed class AppController : IDisposable
                 s = s with { ChecklistAccepted = s.ChecklistAccepted || _settings.ChecklistAccepted };
                 bool directionAffected = s.Wheel.InvertAngle != _settings.Wheel.InvertAngle;
                 if (directionAffected) s = s with { DirectionVerified = false };
-                OnLoop(() => { if (Engine.Governor.State == SafetyState.Armed && directionAffected) Engine.Stop("Settings changed"); });
+                // The DirectInput device reads rotation range and cooperative level when it opens: reopen it.
+                bool reopen = !IsSim && _deviceId != null &&
+                    (s.Wheel.RotationRangeDeg != _settings.Wheel.RotationRangeDeg || s.CooperativeLevel != _settings.CooperativeLevel);
+                OnLoop(() => { if (Engine.Governor.State == SafetyState.Armed && (directionAffected || reopen)) Engine.Stop("Settings changed"); });
                 SaveSettings(s);
+                if (reopen) { try { SelectDevice(_deviceId!); } catch { } }
                 BroadcastState();
                 return null;
             }

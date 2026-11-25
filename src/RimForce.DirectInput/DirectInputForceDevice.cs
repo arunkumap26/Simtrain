@@ -53,7 +53,7 @@ public sealed class DirectInputForceDevice : IForceDevice
     private ConditionSet? _springCond, _damperCond, _frictionCond;
     private EffectParameterFlags _updateFlags = EffectParameterFlags.TypeSpecificParameters | EffectParameterFlags.NoRestart;
     private Guid _guid;
-    private bool _open, _armed, _effectsPlaying;
+    private bool _open, _armed;
     private int _lastSent = int.MinValue;
     private long _lastSendTicks, _lastRestartTicks, _lastReopenTicks;
     private int _reopenDelayMs = 1000;
@@ -200,7 +200,6 @@ public sealed class DirectInputForceDevice : IForceDevice
         try { _dev?.Dispose(); } catch { }
         _dev = null;
         _open = false;
-        _effectsPlaying = false;
         _lastSent = int.MinValue;
     }
 
@@ -215,16 +214,22 @@ public sealed class DirectInputForceDevice : IForceDevice
             try
             {
                 if (!TryAcquire()) { _error = "Could not acquire the wheel (close iRacing / other FFB apps, keep RimForce focused)"; return false; }
-                _dev.SendForceFeedbackCommand(ForceFeedbackCommand.Reset);
-                _dev.SendForceFeedbackCommand(ForceFeedbackCommand.SetActuatorsOn);
-                // Reset destroys downloaded effects: re-create from scratch on the same device object.
-                foreach (var e in new[] { _constant, _spring, _damper, _friction }) { try { e?.Dispose(); } catch { } }
-                _constant = _spring = _damper = _friction = null;
-                CreateEffects();
+                if (_constant == null)
+                {
+                    // First arm on this device object: reset to a clean state and create the effect ONCE.
+                    // Re-creating effects on the same device hits a known Windows driver bug (docs/research/02),
+                    // so later arms only restart the existing effect.
+                    _dev.SendForceFeedbackCommand(ForceFeedbackCommand.Reset);
+                    _dev.SendForceFeedbackCommand(ForceFeedbackCommand.SetActuatorsOn);
+                    CreateEffects();
+                }
+                else
+                {
+                    _dev.SendForceFeedbackCommand(ForceFeedbackCommand.SetActuatorsOn);
+                }
                 _cf!.Magnitude = 0;
-                _constant!.SetParameters(_cfParams!, EffectParameterFlags.TypeSpecificParameters);
+                _constant!.SetParameters(_cfParams!, EffectParameterFlags.TypeSpecificParameters); // (re)downloads if needed
                 _constant.Start(1).CheckError();
-                _effectsPlaying = true;
                 _armed = true;
                 _lastSent = 0;
                 _lastSendTicks = _lastRestartTicks = Stopwatch.GetTimestamp();
@@ -274,7 +279,6 @@ public sealed class DirectInputForceDevice : IForceDevice
         try { _constant?.Stop(); } catch { }
         try { _spring?.Stop(); _damper?.Stop(); _friction?.Stop(); } catch { }
         try { _dev?.SendForceFeedbackCommand(ForceFeedbackCommand.StopAll); } catch { }
-        _effectsPlaying = false;
         _lastSent = int.MinValue;
     }
 
