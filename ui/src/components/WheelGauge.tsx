@@ -228,8 +228,9 @@ export function WheelGauge({ guided = true, accent = '#22d3ee', onDrag }: Props)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#f8fafc';
     ctx.font = `700 ${Math.round(size * 0.075)}px "JetBrains Mono", monospace`;
-    const a = t?.angleDeg ?? 0;
-    ctx.fillText(`${a >= 0 ? '+' : '−'}${Math.abs(a).toFixed(1)}°`, cx, cy - size * 0.012);
+    const a0 = t?.angleDeg ?? 0;
+    const a = Math.abs(a0) < 0.05 ? 0 : a0;
+    ctx.fillText(`${a > 0 ? '+' : a < 0 ? '−' : ''}${Math.abs(a).toFixed(1)}°`, cx, cy - size * 0.012);
     ctx.font = `600 ${Math.round(size * 0.026)}px "Inter", sans-serif`;
     if (guide && guide.showGhost) {
       ctx.fillStyle = inZone ? '#34d399' : '#fbbf24';

@@ -36,7 +36,7 @@ export function Device() {
           <Card title="Live wheel" right={<span className="pill mono">{(t?.loopHz ?? 0).toFixed(0)} Hz · max gap {(t?.maxLoopGapMs ?? 0).toFixed(1)} ms</span>}>
             <div style={{ height: 420 }}><WheelGauge guided={false} /></div>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginTop: 8 }}>
-              <div className="kpi"><span className="l">Angle</span><span className="v" style={{ fontSize: 20 }}>{(t?.angleDeg ?? 0).toFixed(1)}°</span></div>
+              <div className="kpi"><span className="l">Angle</span><span className="v" style={{ fontSize: 20 }}>{(Math.abs(t?.angleDeg ?? 0) < 0.05 ? 0 : t!.angleDeg).toFixed(1)}°</span></div>
               <div className="kpi"><span className="l">Speed</span><span className="v" style={{ fontSize: 20 }}>{(t?.velocityDps ?? 0).toFixed(0)}<span className="u">°/s</span></span></div>
               <div className="kpi"><span className="l">Motor</span><span className="v" style={{ fontSize: 20 }}>{(t?.motorTorqueNm ?? 0).toFixed(2)}<span className="u">Nm</span></span></div>
               <div className="kpi"><span className="l">Command</span><span className="v" style={{ fontSize: 20 }}>{(t?.commandPct ?? 0).toFixed(1)}<span className="u">%</span></span></div>
