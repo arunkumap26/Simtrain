@@ -212,7 +212,7 @@ public static class DrillCatalog
                 new ParamSpec("profile", "Resistance", 2, 0, 6, 1, null, FreeRideLogic.ProfileNames.Select((n, i) => new ParamOption(i.ToString(), n)).ToArray()),
                 new ParamSpec("minutes", "Length", 5, 1, 30, 1, "min"),
             },
-            DefaultSets = 1, DefaultWorkS = 300, DefaultRestS = 0, DefaultLoadPct = 35,
+            DefaultSets = 1, DefaultWorkS = 300, DefaultRestS = 0, DefaultLoadPct = 35, ScoreLabel = "N·m·s",
         },
     };
 

@@ -60,7 +60,7 @@ public sealed class RimForceServer : IAsyncDisposable
         });
 
         web.MapGet("/healthz", () => Results.Text("ok"));
-        web.MapFallback(ServeUi);
+        web.MapFallback("{**path}", ServeUi); // explicit pattern: the default skips paths with file extensions
 
         _app.Outgoing += Broadcast;
         await web.StartAsync();
@@ -80,16 +80,21 @@ public sealed class RimForceServer : IAsyncDisposable
         bool isTick = json.StartsWith("{\"type\":\"tick\"", StringComparison.Ordinal);
         foreach (var ch in _clients.Values)
         {
-            // Ticks may be dropped for slow clients; events and state never are (unbounded writer for those).
-            if (isTick && ch.Reader.Count > 8) continue;
-            ch.Writer.TryWrite(json);
+            try
+            {
+                // Ticks may be dropped for slow clients; events and state never are.
+                if (isTick && ch.Reader.CanCount && ch.Reader.Count > 8) continue;
+                ch.Writer.TryWrite(json);
+            }
+            catch { /* one bad client must not starve the others */ }
         }
     }
 
     private async Task RunClient(WebSocket ws, CancellationToken ct)
     {
         var id = Guid.NewGuid();
-        var outbox = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
+        // Note: not SingleReader — the single-consumer channel does not support Reader.Count (used to drop stale ticks).
+        var outbox = Channel.CreateUnbounded<string>();
         _clients[id] = outbox;
         _app.Engine.Heartbeat();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);

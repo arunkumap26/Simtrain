@@ -7,6 +7,7 @@ int port = 5180;
 string? token = null;
 string? db = null;
 string? uiDir = null;
+bool seed = false;
 for (int i = 0; i < args.Length; i++)
 {
     switch (args[i])
@@ -15,9 +16,11 @@ for (int i = 0; i < args.Length; i++)
         case "--token": token = args[++i]; break;
         case "--db": db = args[++i]; break;
         case "--ui-dir": uiDir = args[++i]; break;
+        case "--seed": seed = true; break;
     }
 }
 db ??= Path.Combine(Path.GetTempPath(), "rimforce-dev", "rimforce.db");
+if (seed) RimForce.DevHost.DemoSeeder.Seed(db);
 
 using var app = new AppController(new AppOptions { DbPath = db, Demo = true, Host = "devhost", ExportRoot = Path.Combine(Path.GetDirectoryName(db)!, "exports") });
 app.Start();

@@ -57,7 +57,7 @@ public sealed class EngineHost : IDisposable
             {
                 double remaining = next - sw.Elapsed.TotalSeconds;
                 if (remaining <= 0) break;
-                if (remaining > 0.002) Thread.Sleep(1);
+                if (remaining > 0.0015) Thread.Sleep(1);
                 else if (remaining > 0.0002) Thread.Yield();
                 else Thread.SpinWait(20);
             }
