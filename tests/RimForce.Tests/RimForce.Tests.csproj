@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\RimForce.Core\RimForce.Core.csproj" />
+    <ProjectReference Include="..\..\src\RimForce.Server\RimForce.Server.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

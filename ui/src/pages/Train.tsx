@@ -313,7 +313,7 @@ function EnduranceLine({ t }: { t: Tick | null }) {
         <span className="dim">front raise</span>
       </div>
       <div className="row" style={{ justifyContent: 'space-between', fontSize: 12, marginTop: 6 }}>
-        <span className="muted">Weakest link <b style={{ color: 'var(--text)' }}>{s.limitingLink}</b> · holdable ~<b className="mono" style={{ color: 'var(--text)' }}>{s.torqueNm < 0.5 || et >= 3600 ? '—' : mmss(et)}</b></span>
+        <span className="muted">Weakest link <b style={{ color: 'var(--text)' }}>{s.limitingLink}</b> · holdable ~<b className="mono" style={{ color: 'var(--text)' }}>{s.torqueNm < 0.5 || et >= 3600 ? '—' : s.limitingPct < 15 ? '15+ min' : mmss(et)}</b></span>
         <span className="mono" style={{ fontSize: 12 }}>{s.budgetUsedPct.toFixed(0)}% used</span>
       </div>
       <div className="bar" style={{ marginTop: 5 }}><i style={{ width: `${Math.min(100, s.budgetUsedPct)}%`, background: s.budgetUsedPct > 85 ? '#f43f5e' : s.budgetUsedPct > 60 ? '#fbbf24' : '#a78bfa' }} /></div>

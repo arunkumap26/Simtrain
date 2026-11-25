@@ -174,10 +174,10 @@ export function WheelGauge({ guided = true, accent = '#22d3ee', onDrag }: Props)
     if (guide && guide.showGhost && act?.phase !== 'complete') {
       ctx.save();
       const sep = Math.min(1, Math.abs(d.ghost - d.angle) / 6); // fade in as you drift off
-      ctx.globalAlpha = 0.35 + 0.45 * sep;
+      ctx.globalAlpha = 0.4 + 0.55 * sep;
       drawWheel(ctx, cx, cy, R, rimW * 0.92, d.ghost, {
-        rim: 'rgba(226,232,240,0.30)', spoke: 'rgba(226,232,240,0.22)', hub: 'rgba(0,0,0,0)', marker: 'rgba(248,250,252,0.9)',
-        outline: 'rgba(241,245,249,0.75)', dashed: true,
+        rim: 'rgba(226,232,240,0.40)', spoke: 'rgba(226,232,240,0.28)', hub: 'rgba(0,0,0,0)', marker: 'rgba(248,250,252,0.95)',
+        outline: 'rgba(241,245,249,0.9)', dashed: true,
       });
       // ghost hand spots
       const hand = act?.hand ?? 'both';
@@ -204,7 +204,7 @@ export function WheelGauge({ guided = true, accent = '#22d3ee', onDrag }: Props)
       const pullDir = Math.sign(tq); // + = clockwise pull
       const len = 18 + 40 * Math.min(1, effort);
       const thick = 4 + 8 * Math.min(1, effort);
-      const col = effortColor(effort);
+      const col = effort > 0.85 ? '#f43f5e' : '#fb7185'; // pull = always red; effort shows as length/thickness
       // pull arrow (outer, at top-ish of the rim, moving with the wheel)
       drawArcArrow(ctx, cx, cy, R + rimW + 30, d.angle - pullDir * len / 2 + 0, d.angle + pullDir * len / 2, col, thick, 0.9);
       // push arrow (where you push) — dashed cyan opposite direction near the bottom of the rim

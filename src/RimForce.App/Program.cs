@@ -14,6 +14,11 @@ internal static class Program
     private static void Main(string[] args)
     {
         Directory.CreateDirectory(DataDir);
+        if (args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase)))
+        {
+            Environment.Exit(SelfTest.Run());
+            return;
+        }
         bool demo = args.Any(a => a.Equals("--demo", StringComparison.OrdinalIgnoreCase));
         bool browser = args.Any(a => a.Equals("--browser", StringComparison.OrdinalIgnoreCase));
 
