@@ -13,7 +13,14 @@ public readonly record struct TorqueRequest(
     /// <summary>True while a set is running and force should be present (drives the soft-start envelope).</summary>
     bool ForceWanted,
     /// <summary>Optional per-drill runaway threshold (deg/s) for drills that move the wheel briskly (e.g. snap catch).</summary>
-    double? RunawaySpeedOverrideDps = null)
+    double? RunawaySpeedOverrideDps = null,
+    /// <summary>Small zero-mean vibration (kerbs). Not slew limited, but clamped to min(MaxVibrationNm, 25% of cap).</summary>
+    double VibrationNm = 0,
+    /// <summary>
+    /// Sprint drills only: raises the hands-off speed threshold (max 720 deg/s) but ONLY while the motor is braking
+    /// the motion. Whenever the motor pushes the way the wheel moves, the normal threshold applies.
+    /// </summary>
+    double? HandsOffSpeedWhenBrakingDps = null)
 {
     public static readonly TorqueRequest None = new(0, 0, 0, false);
 }
@@ -45,6 +52,11 @@ public sealed class SafetyGovernor
     private WheelProfile _profile;
 
     private double _envelope;
+    private double _lastTorque;
+    /// <summary>Below this motor torque the wheel cannot be "running away" (Nm).</summary>
+    public const double HandsOffMinNm = 0.3;
+    /// <summary>Absolute ceiling for the sprint-drill hands-off threshold.</summary>
+    public const double MaxSprintSpeedDps = 720;
     private double _openLoopOut;
     private double _lastTick = double.NaN;
     private double _overSpeedSince = double.NaN;
@@ -82,7 +94,31 @@ public sealed class SafetyGovernor
         set { lock (_lock) _profile = value; }
     }
 
-    public double GlobalCapNm { get { lock (_lock) return _profile.MaxTorqueNm * _s.GlobalCapPct / 100.0; } }
+    public double GlobalCapNm { get { lock (_lock) return _profile.MaxTorqueNm * EffectiveCapPct / 100.0; } }
+
+    /// <summary>True while armed in low-force test mode (device test / direction check).</summary>
+    public bool TestMode { get; private set; }
+    public const double TestModeCapPct = 10;
+    public const double MaxVibrationNm = 2.0;
+
+    private double EffectiveCapPct => TestMode ? Math.Min(_s.GlobalCapPct, TestModeCapPct) : _s.GlobalCapPct;
+
+    /// <summary>
+    /// Arm for the Device Test page: does not need the direction check, but the cap is forced down to 10%
+    /// until the next disarm/stop.
+    /// </summary>
+    public bool TryArmTestMode(double now, double angleDeg, double velocityDps, bool deviceConnected, out string? reason)
+    {
+        bool savedReq = RequireDirectionCheck;
+        RequireDirectionCheck = false;
+        try
+        {
+            if (!TryArm(now, angleDeg, velocityDps, deviceConnected, out reason)) return false;
+            lock (_lock) TestMode = true;
+            return true;
+        }
+        finally { RequireDirectionCheck = savedReq; }
+    }
 
     public bool TryArm(double now, double angleDeg, double velocityDps, bool deviceConnected, out string? reason)
     {
@@ -98,6 +134,8 @@ public sealed class SafetyGovernor
             if (reason != null) return false;
 
             State = SafetyState.Armed;
+            TestMode = false;
+            _lastTorque = 0;
             _envelope = 0;
             _openLoopOut = 0;
             _rampingDown = false;
@@ -210,8 +248,16 @@ public sealed class SafetyGovernor
         if (forceActive && Math.Abs(input.AngleDeg) > p.LockDeg - s.LockMarginDeg)
         { Trip(now, TripCode.AngleLimit, $"Wheel too close to the lock ({input.AngleDeg:0}°)"); return Stopped(); }
 
-        // Rule 4: hands off (sustained overspeed).
-        if (forceActive && absV > s.HandsOffSpeedDps)
+        // Rule 4: hands off = sustained overspeed while force is active (|torque| >= 0.3 Nm). Sprint drills may
+        // raise the threshold, but only while the motor brakes the motion (see DECISIONS.md).
+        double lastTq;
+        lock (_lock) lastTq = _lastTorque;
+        bool torqueActive = Math.Abs(lastTq) >= HandsOffMinNm;
+        bool braking = lastTq * input.VelocityDps < 0;
+        double handsOffSpeed = braking && req.HandsOffSpeedWhenBrakingDps is { } sprint
+            ? Math.Clamp(sprint, s.HandsOffSpeedDps, MaxSprintSpeedDps)
+            : s.HandsOffSpeedDps;
+        if (forceActive && torqueActive && absV > handsOffSpeed)
         {
             if (double.IsNaN(_overSpeedSince)) _overSpeedSince = now;
             if (now - _overSpeedSince >= s.HandsOffTimeS)
@@ -227,7 +273,9 @@ public sealed class SafetyGovernor
         else if (target < envelope) envelope = Math.Max(target, envelope - tickDt / s.RampDownS);
 
         // Rule 2: caps.
-        double cap = Math.Max(0, Math.Min(p.MaxTorqueNm * s.GlobalCapPct / 100.0, req.DrillCapNm));
+        double capPct;
+        lock (_lock) capPct = EffectiveCapPct;
+        double cap = Math.Max(0, Math.Min(p.MaxTorqueNm * capPct / 100.0, req.DrillCapNm));
 
         // Rule 3b: open-loop slew limit, the full cap can be crossed no faster than MinPulseRampS.
         double maxStep = cap / s.MinPulseRampS * tickDt;
@@ -235,9 +283,11 @@ public sealed class SafetyGovernor
         openOut += Math.Clamp(wantOpen - openOut, -maxStep, maxStep);
         openOut = Math.Clamp(openOut, -cap, cap);
 
-        double torque = (openOut + Math.Clamp(req.ReactiveNm, -cap, cap)) * envelope;
+        double vibLimit = Math.Min(MaxVibrationNm, 0.25 * cap);
+        double torque = (openOut + Math.Clamp(req.ReactiveNm, -cap, cap) + Math.Clamp(req.VibrationNm, -vibLimit, vibLimit)) * envelope;
         torque = Math.Clamp(torque, -cap, cap);
 
+        double rawTorque = torque; // before the fade: what the drill is trying to do
         // Rule 7 support: overspeed fade when the motor is the one moving the wheel.
         bool motorWinning = torque * input.VelocityDps > 0;
         if (motorWinning && absV > s.OverspeedFadeStartDps)
@@ -261,7 +311,8 @@ public sealed class SafetyGovernor
             if (State != SafetyState.Armed) return Stopped(); // tripped from another thread meanwhile
             _envelope = envelope;
             _openLoopOut = openOut;
-            if (_rampingDown && envelope <= 0) { Finish(now); return new GovernorOutput(0, 0, false); }
+            _lastTorque = rawTorque;
+            if (_rampingDown && envelope <= 0) { Finish(now); _lastTorque = 0; return new GovernorOutput(0, 0, false); }
         }
         return new GovernorOutput(torque, envelope, false);
     }

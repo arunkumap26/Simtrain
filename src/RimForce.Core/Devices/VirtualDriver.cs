@@ -29,7 +29,9 @@ public sealed class VirtualDriver
     /// <summary>How fast the driver fatigues (0 = never).</summary>
     public double FatigueRate { get; set; } = 0.012;
 
-    public double StiffnessNmPerDeg { get; set; } = 0.35;
+    public double StiffnessNmPerDeg { get; set; } = 0.5;
+    /// <summary>How fast the driver's intended position can move (deg/s): a human does not teleport.</summary>
+    public double MaxRefSpeedDps { get; set; } = 300;
     public double DampingNmPerDps { get; set; } = 0.012;
     public double VoluntaryGain { get; set; } = 2.2;   // Nm per deg per s
     public double TremorNm { get; set; } = 0.06;
@@ -48,6 +50,7 @@ public sealed class VirtualDriver
 
     private double _voluntary;
     private double _delayedErr;
+    private double _ref = double.NaN;
     private readonly Queue<(double t, double err)> _delayLine = new();
     private readonly Random _rng;
     private double _wander;
@@ -58,6 +61,7 @@ public sealed class VirtualDriver
     {
         _voluntary = 0;
         _delayedErr = 0;
+        _ref = double.NaN;
         _delayLine.Clear();
         Fatigue = 0;
         LastTorqueNm = 0;
@@ -74,12 +78,16 @@ public sealed class VirtualDriver
             _delayedErr = 0;
             _delayLine.Clear();
             LastTorqueNm = 0;
+            _ref = angleDeg;
             Recover(dt);
             return 0;
         }
 
         double target = Mode == DriverMode.Manual ? ManualTargetDeg : GuideTargetDeg;
-        double err = target - angleDeg;
+        if (double.IsNaN(_ref)) _ref = angleDeg;
+        double maxStep = MaxRefSpeedDps * dt;
+        _ref += Math.Clamp(target - _ref, -maxStep, maxStep);
+        double err = _ref - angleDeg;
 
         // Delayed perception for voluntary control.
         _delayLine.Enqueue((t, err));

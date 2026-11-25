@@ -195,12 +195,12 @@ public class SafetyGovernorTests
     public void HandsOffTripsAfter50msAbove400dps()
     {
         var clock = new ManualClock();
-        var g = Rig.ArmedGovernor(clock, new SafetySettings { RunawayDetection = false });
+        var g = Rig.ArmedGovernor(clock, new SafetySettings { RunawayDetection = false, OverspeedFadeStartDps = 400 });
         Rig.Run(g, clock, 2, Want(3));
-        // Wheel spinning against the torque direction (so the fade does not apply), above the threshold.
-        var o = Rig.Run(g, clock, 0.04, Want(3), _ => Rig.Still(0, -450));
+        // Wheel spinning the way the motor pushes, above the threshold, with the fade disabled.
+        var o = Rig.Run(g, clock, 0.04, Want(3), _ => Rig.Still(0, 410));
         Assert.Equal(SafetyState.Armed, g.State);
-        o = Rig.Run(g, clock, 0.016, Want(3), _ => Rig.Still(0, -450));
+        o = Rig.Run(g, clock, 0.016, Want(3), _ => Rig.Still(0, 410));
         Assert.Equal(SafetyState.Tripped, g.State);
         Assert.Equal(TripCode.HandsOff, g.LastTrip);
         Assert.Equal(0, o.TorqueNm);
@@ -210,12 +210,35 @@ public class SafetyGovernorTests
     public void ShortSpeedSpikeDoesNotTrip()
     {
         var clock = new ManualClock();
-        var g = Rig.ArmedGovernor(clock, new SafetySettings { RunawayDetection = false });
+        var g = Rig.ArmedGovernor(clock, new SafetySettings { RunawayDetection = false, OverspeedFadeStartDps = 400 });
         Rig.Run(g, clock, 2, Want(3));
-        Rig.Run(g, clock, 0.03, Want(3), _ => Rig.Still(0, -450));
+        Rig.Run(g, clock, 0.03, Want(3), _ => Rig.Still(0, 410));
         Rig.Run(g, clock, 0.1, Want(3));
-        Rig.Run(g, clock, 0.03, Want(3), _ => Rig.Still(0, -450));
+        Rig.Run(g, clock, 0.03, Want(3), _ => Rig.Still(0, 410));
         Assert.Equal(SafetyState.Armed, g.State);
+    }
+
+    [Fact]
+    public void SprintDrillMayRaiseHandsOffSpeedOnlyWhileBraking()
+    {
+        var clock = new ManualClock();
+        var g = Rig.ArmedGovernor(clock);
+        var sprint = new TorqueRequest(3, 0, 100, true, HandsOffSpeedWhenBrakingDps: 720);
+        Rig.Run(g, clock, 2, sprint);
+        Rig.Run(g, clock, 0.3, sprint, _ => Rig.Still(0, -600)); // motor +3 Nm, wheel -600 deg/s: braking
+        Assert.Equal(SafetyState.Armed, g.State);
+        Rig.Run(g, clock, 0.06, sprint, _ => Rig.Still(0, -750)); // above the 720 ceiling
+        Assert.Equal(TripCode.HandsOff, g.LastTrip);
+    }
+
+    [Fact]
+    public void WithoutSprintOverrideBrakingOverspeedStillTrips()
+    {
+        var clock = new ManualClock();
+        var g = Rig.ArmedGovernor(clock);
+        Rig.Run(g, clock, 2, Want(3));
+        Rig.Run(g, clock, 0.06, Want(3), _ => Rig.Still(0, -450));
+        Assert.Equal(TripCode.HandsOff, g.LastTrip);
     }
 
     [Fact]

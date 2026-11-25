@@ -49,6 +49,10 @@ public sealed class TrainingEngine
     private double _motorTorque;
     private double _commandPct;
     private double _userTorque;
+    private double _userTorqueDisplay;
+    private double _budget;
+    private int _lastSetSerial = -1;
+    private LiveStrength _strength = LiveStrength.Zero;
     private double _angle;
     private double _uiHeartbeat;
     private uint _lastButtons;
@@ -77,6 +81,9 @@ public sealed class TrainingEngine
     public Dictionary<int, ButtonAction> ButtonMap { get; } = new();
     /// <summary>Maximum torque (Nm) used for "% of max" when the activity does not provide one (latest breakpoint).</summary>
     public double? ReferenceMaxNm { get; set; }
+    public StrengthNorms Norms { get; set; } = StrengthNorms.Men;
+    public double? BodyMassKg { get; set; }
+    public bool WristTechnique { get; set; }
 
     public WheelProfile Profile
     {
@@ -187,6 +194,8 @@ public sealed class TrainingEngine
         // User torque estimate: J*alpha = motor + user  =>  user = J*alpha - motor.
         double jAlpha = _profile.InertiaKgM2 * acc * Units.DegToRad;
         _userTorque = jAlpha - _motorTorque;
+        double a = dt <= 0 ? 1 : dt / (0.04 + dt);
+        _userTorqueDisplay += a * (_userTorque - _userTorqueDisplay);
 
         bool armed = Governor.State == SafetyState.Armed;
         var tick = new ActivityTick(now, dt, angle, vel, acc, _motorTorque, _userTorque, Governor.Envelope, armed, Intensity);
@@ -235,6 +244,7 @@ public sealed class TrainingEngine
             _events.Enqueue(new EngineEvent("safety", new { se.Kind, Code = se.Code.ToString(), se.Message }));
 
         HandleButtons(reading.Buttons);
+        UpdateStrength(dt);
 
         if (double.IsNaN(_lastPublish) || now - _lastPublish >= PublishIntervalS)
         {
@@ -243,15 +253,25 @@ public sealed class TrainingEngine
         }
     }
 
+    private void UpdateStrength(double dt)
+    {
+        var info = Activity as IHandsAware;
+        int hands = info?.HandsOnWheel ?? 2;
+        double? max = info?.ReferenceMaxNm ?? ReferenceMaxNm;
+        if (info != null && info.SetSerial != _lastSetSerial) { _lastSetSerial = info.SetSerial; _budget = 0; }
+        var st = StrengthMath.Compute(_profile, _userTorqueDisplay, _vel.Velocity, hands, max, _angle, Norms, BodyMassKg, WristTechnique, _budget);
+        if (info?.InWork == true && dt > 0 && st.LimitingPct > 15)
+            _budget = Math.Min(999, _budget + dt / st.EnduranceS * 100);
+        _strength = st;
+    }
+
     private void Publish(double now)
     {
-        int hands = Activity is IHandsAware h ? h.HandsOnWheel : 2;
-        double? max = Activity is IHandsAware h2 && h2.ReferenceMaxNm is { } m ? m : ReferenceMaxNm;
-        var strength = StrengthMath.Compute(_profile, _userTorque, _vel.Velocity, hands, max);
+        var strength = _strength;
         object? act = null;
         try { act = Activity?.Snapshot(); } catch { }
         _latest = new EngineSnapshot(
-            now, _angle, _vel.Velocity, _motorTorque, _userTorque, _commandPct, Governor.Envelope,
+            now, _angle, _vel.Velocity, _motorTorque, _userTorqueDisplay, _commandPct, Governor.Envelope,
             Governor.State.ToString(), Governor.State == SafetyState.Tripped ? Governor.LastTrip.ToString() : null,
             Governor.State == SafetyState.Tripped ? Governor.LastTripMessage : null,
             _loopHz, _maxGapMs, Intensity, Governor.GlobalCapNm, _profile.MaxTorqueNm,
@@ -299,6 +319,10 @@ public interface IHandsAware
 {
     int HandsOnWheel { get; }
     double? ReferenceMaxNm { get; }
+    /// <summary>True while a working set is running (force on).</summary>
+    bool InWork { get; }
+    /// <summary>Increments every time a new set starts (resets per-set accumulators).</summary>
+    int SetSerial { get; }
 }
 
 /// <summary>Activities that react to a "next / skip" input (wheel button, Enter).</summary>

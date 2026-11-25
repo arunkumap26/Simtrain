@@ -27,6 +27,11 @@ public sealed record WheelProfile
     /// <summary>Friction coefficient between hand and rim (leather/alcantara ~0.6-0.9). Used for the grip-force estimate.</summary>
     public double HandRimFriction { get; init; } = 0.7;
 
+    /// <summary>
+    /// Measured / nominal torque ratio from the luggage-scale calibration on the Device page (1.0 = trust the spec).
+    /// </summary>
+    public double TorqueCalibration { get; init; } = 1.0;
+
     /// <summary>Flip the sign of every force command. Determined by the direction check in Device Test.</summary>
     public bool InvertForce { get; init; }
 
@@ -35,7 +40,7 @@ public sealed record WheelProfile
 
     public double RimRadiusM => RimDiameterMm / 2000.0;
     public double LockDeg => RotationRangeDeg / 2.0;
-    public double MaxTorqueNm => BaseMaxTorqueNm * Math.Clamp(SimProStrengthPct, 0, 100) / 100.0;
+    public double MaxTorqueNm => BaseMaxTorqueNm * Math.Clamp(SimProStrengthPct, 0, 100) / 100.0 * Math.Clamp(TorqueCalibration, 0.5, 1.5);
 
     public double NmToPercent(double nm) => MaxTorqueNm <= 0 ? 0 : nm / MaxTorqueNm * 100.0;
     public double PercentToNm(double pct) => pct / 100.0 * MaxTorqueNm;
