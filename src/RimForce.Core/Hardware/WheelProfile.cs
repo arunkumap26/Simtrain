@@ -38,6 +38,9 @@ public sealed record WheelProfile
     /// <summary>Flip the sign of the wheel angle reading.</summary>
     public bool InvertAngle { get; init; }
 
+    /// <summary>Reading (deg) that corresponds to the physical centre ("Set centre here" on the Device page).</summary>
+    public double CenterOffsetDeg { get; init; }
+
     public double RimRadiusM => RimDiameterMm / 2000.0;
     public double LockDeg => RotationRangeDeg / 2.0;
     public double MaxTorqueNm => BaseMaxTorqueNm * Math.Clamp(SimProStrengthPct, 0, 100) / 100.0 * Math.Clamp(TorqueCalibration, 0.5, 1.5);

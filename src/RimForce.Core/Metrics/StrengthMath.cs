@@ -44,7 +44,7 @@ public sealed record LiveStrength(
     double BudgetUsedPct,
     int Hands)
 {
-    public static readonly LiveStrength Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "shoulder", 0, double.PositiveInfinity, 0, 2);
+    public static readonly LiveStrength Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "shoulder", 0, 3600, 0, 2);
 }
 
 /// <summary>
@@ -116,10 +116,10 @@ public static class StrengthMath
     /// <summary>Rohmert endurance time (s) for a fraction of MVC. Below 15% we floor at ET(0.15) (Rohmert is optimistic there).</summary>
     public static double EnduranceSeconds(double f)
     {
-        if (f <= 0.01) return double.PositiveInfinity;
+        if (f <= 0.01) return 3600;
         f = Math.Clamp(f, 0.15, 1.0);
         double minutes = -1.5 + 2.1 / f - 0.6 / (f * f) + 0.1 / (f * f * f);
-        return Math.Max(1, minutes * 60);
+        return Math.Clamp(minutes * 60, 1, 3600);
     }
 
     /// <summary>Inverse of Rohmert: what fraction of MVC can be held for this many seconds (0.15..1).</summary>

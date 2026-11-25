@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>RimForce.Server</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RimForce.Core\RimForce.Core.csproj" />
+  </ItemGroup>
+  <!-- The built UI (ui/dist) is embedded so the exe is self-contained. Run `npm run build` in ui/ first. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\ui\dist\**\*" LogicalName="ui/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

@@ -31,8 +31,12 @@ public sealed record SafetySettings
 
     /// <summary>Rule 6: trip if the force loop misses this long.</summary>
     public double WatchdogS { get; init; } = 0.1;
-    /// <summary>Rule 6b: give DirectInput effects a finite duration refreshed every loop so a frozen app lets force lapse.</summary>
-    public bool FiniteEffectDurations { get; init; } = true;
+    /// <summary>
+    /// Rule 6b: give DirectInput effects a short finite duration, restarted every 100 ms, so a frozen app lets force
+    /// lapse. OFF by default: Simagic's driver is reported to mishandle finite durations (16-bit ms) and the restart
+    /// may pulse. The independent watchdog thread is the primary protection. See DECISIONS.md.
+    /// </summary>
+    public bool FiniteEffectDurations { get; init; } = false;
     public double EffectDurationS { get; init; } = 0.25;
 
     /// <summary>Trip if the UI stops sending heartbeats (crashed / frozen window).</summary>

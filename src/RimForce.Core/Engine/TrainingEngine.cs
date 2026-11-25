@@ -93,6 +93,8 @@ public sealed class TrainingEngine
 
     public EngineSnapshot? Latest => _latest;
     public double AngleDeg => _angle;
+    /// <summary>Last raw reading from the device (before inversion and centre offset).</summary>
+    public double RawAngleDeg { get; private set; }
     public double VelocityDps => _vel.Velocity;
 
     // ---------------- thread-safe API ----------------
@@ -147,6 +149,24 @@ public sealed class TrainingEngine
 
     public void Disarm() => Governor.RequestDisarm(_clock.Now);
 
+    /// <summary>Arm with the cap forced to 10% (Device Test / direction check). No direction check needed.</summary>
+    public bool ArmTestMode(out string? reason)
+    {
+        double now = _clock.Now;
+        if (!Device.IsConnected) { reason = "No wheel connected."; return false; }
+        if (Governor.State == SafetyState.Armed) Governor.UserStop(now);
+        if (!Governor.TryArmTestMode(now, _angle, _vel.Velocity, Device.IsConnected, out reason)) return false;
+        if (!Device.Arm())
+        {
+            Governor.Trip(now, TripCode.DeviceError, "Could not acquire the wheel for force feedback");
+            reason = "Could not acquire the wheel (is iRacing or another FFB app open?)";
+            return false;
+        }
+        Device.SetDeviceGain(100);
+        Heartbeat();
+        return true;
+    }
+
     public void SetActivity(IActivity? activity)
     {
         Activity = activity;
@@ -184,8 +204,9 @@ public sealed class TrainingEngine
         DeviceReading reading;
         try { reading = Device.Read(); }
         catch (Exception ex) { reading = new DeviceReading(_angle, Device.IsConnected, 0, ex.Message); }
+        RawAngleDeg = reading.AngleDeg;
 
-        double angle = _profile.InvertAngle ? -reading.AngleDeg : reading.AngleDeg;
+        double angle = (_profile.InvertAngle ? -reading.AngleDeg : reading.AngleDeg) - _profile.CenterOffsetDeg;
         _angle = angle;
         _vel.Update(now, angle);
         double vel = _vel.Velocity;

@@ -18,8 +18,8 @@ public sealed record AppSettings
     public double AudioVolume { get; init; } = 0.7;
     public bool VoiceCues { get; init; } = true;
     public int SessionsPerWeek { get; init; } = 3;
-    /// <summary>Force loop rate (Hz).</summary>
-    public double LoopHz { get; init; } = 500;
+    /// <summary>Force loop rate (Hz). 360 Hz like irFFB/MAIRA; ~500 Hz is at the practical limit of many bases.</summary>
+    public double LoopHz { get; init; } = 360;
     /// <summary>DirectInput cooperative level: "foreground" (safer, the default) or "background".</summary>
     public string CooperativeLevel { get; init; } = "foreground";
     /// <summary>Use native DirectInput spring/damper/friction instead of software rendering (Device Test only by default).</summary>
