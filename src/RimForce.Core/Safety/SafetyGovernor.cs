@@ -101,7 +101,19 @@ public sealed class SafetyGovernor
     public const double TestModeCapPct = 10;
     public const double MaxVibrationNm = 2.0;
 
-    private double EffectiveCapPct => TestMode ? Math.Min(_s.GlobalCapPct, TestModeCapPct) : _s.GlobalCapPct;
+    private double? _capOverridePct;
+
+    /// <summary>
+    /// Temporary cap (% of device max) that replaces the global cap, e.g. 100 during a confirmed Max Strength Test.
+    /// Null = use the global cap. Test mode (device tests) still wins and stays at 10%.
+    /// </summary>
+    public double? CapOverridePct
+    {
+        get { lock (_lock) return _capOverridePct; }
+        set { lock (_lock) _capOverridePct = value is { } v ? Math.Clamp(v, 0, 100) : null; }
+    }
+
+    private double EffectiveCapPct => TestMode ? Math.Min(_s.GlobalCapPct, TestModeCapPct) : (_capOverridePct ?? _s.GlobalCapPct);
 
     /// <summary>
     /// Arm for the Device Test page: does not need the direction check, but the cap is forced down to 10%

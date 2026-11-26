@@ -61,6 +61,34 @@ public sealed class AppController : IDisposable
     private Thread? _pump;
     private volatile bool _running;
     private ButtonAction? _bindPending;
+    private bool _maxTestActive;
+
+    /// <summary>Max Strength Test battery items: id → (drill, hand, direction, label).</summary>
+    public static readonly IReadOnlyDictionary<string, (string drill, Hand hand, PushDir dir, string label)> MaxTestItems =
+        new Dictionary<string, (string, Hand, PushDir, string)>
+        {
+            // One arm at a time: stays inside what a 12 Nm motor can load, and isolates each shoulder.
+            ["profile-right-lift"] = ("speed-profile", Hand.Right, PushDir.Left, "Right arm · lift (hand at 3 o'clock, push up)"),
+            ["profile-left-lift"] = ("speed-profile", Hand.Left, PushDir.Right, "Left arm · lift (hand at 9 o'clock, push up)"),
+            ["profile-right-press"] = ("speed-profile", Hand.Right, PushDir.Right, "Right arm · press (hand at 3 o'clock, push down)"),
+            ["profile-left-press"] = ("speed-profile", Hand.Left, PushDir.Left, "Left arm · press (hand at 9 o'clock, push down)"),
+            ["profile-both-right"] = ("speed-profile", Hand.Both, PushDir.Right, "Two hands · speed–strength · turn right"),
+            ["profile-both-left"] = ("speed-profile", Hand.Both, PushDir.Left, "Two hands · speed–strength · turn left"),
+            ["endurance-both-right"] = ("breakpoint", Hand.Both, PushDir.Right, "Two hands · hold at full power until failure (≤ 3 min)"),
+            ["hold-both-right"] = ("breakpoint", Hand.Both, PushDir.Right, "Two hands · hold max · turn right"),
+            ["hold-both-left"] = ("breakpoint", Hand.Both, PushDir.Left, "Two hands · hold max · turn left"),
+            ["push-both-right"] = ("max-push", Hand.Both, PushDir.Right, "Two hands · push-through ladder · right"),
+            ["push-both-left"] = ("max-push", Hand.Both, PushDir.Left, "Two hands · push-through ladder · left"),
+        };
+
+    public static readonly string[] DefaultMaxBattery = { "profile-right-lift", "profile-left-lift", "profile-right-press", "profile-left-press" };
+
+    private void EndMaxTestMode()
+    {
+        if (!_maxTestActive) return;
+        _maxTestActive = false;
+        Engine.Governor.CapOverridePct = null;
+    }
     private string? _deviceId;
 
     public TrainingEngine Engine { get; }
@@ -223,9 +251,10 @@ public sealed class AppController : IDisposable
                 {
                     _sessionId ??= _repo.StartSession(_runner?.Plan.Title ?? r.DrillName, _runner?.Plan.ProgramRef);
                     long setId = _repo.SaveSet(_sessionId.Value, r);
-                    if (r.DrillId == "breakpoint" && r.Completed && r.Metrics.GetValueOrDefault("valid") > 0)
+                    bool profileOk = r.DrillId == "speed-profile" && r.Metrics.GetValueOrDefault("valid") > 0 && r.Metrics.GetValueOrDefault("confidence") >= 2;
+                    if ((r.DrillId == "breakpoint" && r.Completed && r.Metrics.GetValueOrDefault("valid") > 0) || profileOk)
                     {
-                        _repo.AddBreakpoint(r.Hand, r.Direction == PushDir.Right ? 1 : -1, r.Score, r.Metrics.GetValueOrDefault("estimated") > 0);
+                        _repo.AddBreakpoint(r.Hand, r.Direction == PushDir.Right ? 1 : -1, r.Score, r.Metrics.GetValueOrDefault("estimated") > 0 || profileOk);
                         _refs.Record(r.Hand, r.Direction == PushDir.Right ? 1 : -1, r.Score);
                         Engine.ReferenceMaxNm = _refs.Resolve(Hand.Both, 1);
                     }
@@ -247,6 +276,7 @@ public sealed class AppController : IDisposable
                     _sessionId = null;
                 }
                 Engine.Post(() => Engine.Disarm());
+                EndMaxTestMode();
                 SendEvent("sessionComplete", e.Data);
                 BroadcastState();
                 break;
@@ -449,6 +479,46 @@ public sealed class AppController : IDisposable
                 return null;
             }
 
+            case "startMaxTest":
+            {
+                // Max Strength Test: a battery of hold-max (ramp to slip) and push-through-max (concentric ladder)
+                // attempts. With fullPower the global cap is replaced by 100% of the device for THIS session only.
+                bool fullPower = Arg(args, "fullPower", true);
+                if (fullPower && !Arg(args, "confirmed", false))
+                    throw new CommandException("Confirm you're braced, thumbs outside the spokes and the rig is bolted down.");
+                var ids = Arg(args, "battery", DefaultMaxBattery.ToList())
+                    .Where(MaxTestItems.ContainsKey).Distinct().ToList();
+                if (ids.Count == 0) throw new CommandException("Pick at least one test.");
+                double rest = Math.Clamp(Arg(args, "restS", 90.0), 30, 300);
+                double ramp = Math.Clamp(Arg(args, "rampPctPerS", 4.0), 1, 8);
+                var items = new List<SessionItem>();
+                foreach (var id in ids)
+                {
+                    var (drill, hand, dir, _) = MaxTestItems[id];
+                    var cfg = DrillCatalog.DefaultConfig(drill) with { Sets = 1, RestS = rest, Hand = hand, Direction = dir, Role = "Test", LoadPct = 100 };
+                    if (drill == "breakpoint")
+                    {
+                        bool endurance = id.StartsWith("endurance", StringComparison.Ordinal);
+                        cfg.Params["rampPctPerS"] = ramp;
+                        cfg.Params["startPct"] = endurance ? 50 : 25;
+                        cfg.Params["maxEnduranceS"] = endurance ? 180 : 20;
+                        cfg = cfg with { WorkS = 60 };
+                    }
+                    items.Add(new SessionItem(cfg));
+                }
+                var warmup = DrillCatalog.DefaultConfig("corner-hold") with { Sets = 2, WorkS = 15, RestS = 20, LoadPct = 25, Role = "Warm-up", Direction = PushDir.Alternate };
+                warmup.Params["angle"] = 0;
+                items.Insert(0, new SessionItem(warmup));
+                LoadPlan(new SessionPlan("Max Strength Test", items) { ProgramRef = "maxtest" });
+                if (fullPower)
+                {
+                    Engine.Governor.CapOverridePct = 100;
+                    _maxTestActive = true;
+                }
+                BroadcastState();
+                return new { tests = ids.Count, capNm = Engine.Governor.GlobalCapNm };
+            }
+
             case "setFocusMode":
             {
                 // "strict": stop when RimForce loses focus, DirectInput Foreground (Windows releases the wheel too).
@@ -503,6 +573,7 @@ public sealed class AppController : IDisposable
 
             case "deviceTest":
             {
+                EndMaxTestMode();
                 string effect = Arg(args, "effect", "none");
                 double pct = Arg(args, "pct", 10.0);
                 if (_runner != null && _runner.WantsArmed) throw new CommandException("End the current session first.");
@@ -521,6 +592,7 @@ public sealed class AppController : IDisposable
 
             case "directionCheck":
             {
+                EndMaxTestMode();
                 if (_runner != null && _runner.WantsArmed) throw new CommandException("End the current session first.");
                 string? why = null;
                 bool ok = OnLoop(() =>
@@ -583,6 +655,7 @@ public sealed class AppController : IDisposable
 
     private void LoadPlan(SessionPlan plan)
     {
+        EndMaxTestMode(); // a new plan never inherits the max-test cap; startMaxTest re-enables it after loading
         OnLoop(() =>
         {
             if (Engine.Governor.State == SafetyState.Armed && Engine.Governor.TestMode) Engine.Stop("Device test ended");
@@ -596,6 +669,7 @@ public sealed class AppController : IDisposable
 
     private void EndSession()
     {
+        EndMaxTestMode();
         OnLoop(() =>
         {
             Engine.Stop("Session ended");
@@ -669,6 +743,11 @@ public sealed class AppController : IDisposable
             },
             session = _runner == null ? null : new { _runner.Plan.Title, _runner.Plan.ProgramRef, items = _runner.Plan.Items.Count },
             bindPending = _bindPending?.ToString(),
+            maxTest = new
+            {
+                active = _maxTestActive,
+                items = MaxTestItems.Select(kv => new { id = kv.Key, kv.Value.drill, hand = kv.Value.hand.ToString(), dir = kv.Value.dir.ToString(), kv.Value.label }),
+            },
         };
     }
 

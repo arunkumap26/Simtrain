@@ -202,6 +202,40 @@ public static class DrillCatalog
         },
         new()
         {
+            Id = "speed-profile", Name = "Speed–Strength Profile", Category = "Test", Icon = "sprint", Accent = "#f43f5e", IsTest = true,
+            Tagline = "Estimates your true max — even beyond what the wheel can make.",
+            Description = "Turn as fast as you can against several loads. Heavier loads make you slower in a near-straight line; extending that line to zero speed estimates your maximum steering torque, power and top speed. Works past the motor's 12 Nm limit.",
+            HowTo = new[] { "Hands at 9 and 3, thumbs outside the spokes.", "BRACE while it loads, then on GO turn to the marker as fast as you can.", "Ease it back — don't let go.", "Every rep is all-out. Rest when it says shake out." },
+            Targets = T(1.0, 0.7, 1.0, 0.4), ResistanceProfile = "load–velocity",
+            Params = new[]
+            {
+                new ParamSpec("loads", "Loads", 5, 3, 8, 1),
+                new ParamSpec("minPct", "Lightest load", 40, 10, 80, 5, "%"),
+                new ParamSpec("maxPct", "Heaviest load", 100, 50, 100, 5, "%"),
+                new ParamSpec("reps", "Reps per load", 2, 1, 3, 1),
+                new ParamSpec("rangeDeg", "Push to", 70, 30, 120, 5, "°"),
+            },
+            DefaultSets = 1, DefaultWorkS = 600, DefaultRestS = 90, DefaultLoadPct = 100, ScoreLabel = "Nm", Direction = PushDir.Right,
+            Why = "Load–velocity profiling is how coaches estimate a 1-rep max without maximal lifts; here it estimates the torque your shoulders and arms can produce at zero speed.",
+        },
+        new()
+        {
+            Id = "max-push", Name = "Push-Through Max", Category = "Test", Icon = "test", Accent = "#f43f5e", IsTest = true,
+            Tagline = "How much can you move? A 1-rep-max ladder for steering.",
+            Description = "The wheel loads up and pulls you back to centre. Turn to the target within the time limit. Every rung you make, the load goes up. The first rung you can't complete ends the test — your max is the heaviest one you moved.",
+            HowTo = new[] { "Hands at 9 and 3, thumbs outside the spokes.", "Brace while it loads, then PUSH to the marker.", "Let it come back slowly — don't let go.", "Shake out, next rung is heavier." },
+            Targets = T(1.0, 0.8, 1.0, 0.4), ResistanceProfile = "ladder",
+            Params = new[]
+            {
+                new ParamSpec("targetDeg", "Push to", 35, 20, 60, 5, "°"),
+                new ParamSpec("pushTimeS", "Time limit", 4, 2, 8, 0.5, "s"),
+                new ParamSpec("startPct", "First rung", 30, 10, 60, 5, "%"),
+                new ParamSpec("stepPct", "Step", 10, 5, 20, 2.5, "%"),
+            },
+            DefaultSets = 1, DefaultWorkS = 300, DefaultRestS = 90, DefaultLoadPct = 100, ScoreLabel = "Nm", Direction = PushDir.Right,
+        },
+        new()
+        {
             Id = "free-ride", Name = "Free Ride", Category = "Sandbox", Icon = "free", Accent = "#94a3b8",
             Tagline = "Pick a resistance and just turn. Live numbers, no targets.",
             Description = "Choose a resistance profile — constant, bungee (spring), water (damper), sand (friction), wave, kerbs, or everything — set the intensity and play.",
@@ -227,6 +261,8 @@ public static class DrillCatalog
         "kerb-hold" => new KerbHoldLogic(),
         "wave-hold" => new WaveHoldLogic(),
         "breakpoint" => new BreakpointLogic(),
+        "max-push" => new MaxPushLogic(),
+        "speed-profile" => new SpeedStrengthLogic(),
         "lock-to-lock" => new LockToLockLogic(),
         "slow-return" => new SlowReturnLogic(),
         "iso-speed" => new IsoSpeedLogic(),

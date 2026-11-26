@@ -297,6 +297,8 @@ public sealed class SessionRunner : IActivity, IHandsAware, INextable
 
         if (Def.Id == "breakpoint" && completed && metrics.TryGetValue("valid", out var v) && v > 0)
             _refs.Record(_ctx.Hand, _ctx.Dir, score);
+        if (Def.Id == "speed-profile" && metrics.GetValueOrDefault("valid") > 0 && metrics.GetValueOrDefault("confidence") >= 2)
+            _refs.Record(_ctx.Hand, _ctx.Dir, score);
 
         Emit("setEnd", result);
         _logic = null;

@@ -30,6 +30,11 @@ public sealed class VirtualDriver
     public double FatigueRate { get; set; } = 0.012;
 
     public double StiffnessNmPerDeg { get; set; } = 0.5;
+    /// <summary>
+    /// Force–velocity: concentric capacity falls linearly to zero at this speed (deg/s), like muscle (Hill).
+    /// </summary>
+    public double ForceVelocityMaxDps { get; set; } = 1400;
+
     /// <summary>How fast the driver's intended position can move (deg/s): a human does not teleport.</summary>
     public double MaxRefSpeedDps { get; set; } = 300;
     public double DampingNmPerDps { get; set; } = 0.012;
@@ -104,7 +109,10 @@ public sealed class VirtualDriver
         double tremor = TremorNm * Math.Sin(2 * Math.PI * 9.0 * t) + _wander;
 
         double torque = StiffnessNmPerDeg * err - DampingNmPerDps * velocityDps + _voluntary + tremor;
-        torque = Math.Clamp(torque, -cap, cap);
+        // Concentric (pushing the way the wheel is moving) capacity falls with speed.
+        double concentric = Math.Sign(torque) * velocityDps;
+        double fv = concentric > 0 ? Math.Max(0.05, 1 - concentric / Math.Max(100, ForceVelocityMaxDps)) : 1.0;
+        torque = Math.Clamp(torque, -cap * fv, cap * fv);
 
         // Fatigue grows with relative effort squared; recovers when lightly loaded.
         double rel = Math.Abs(torque) / Math.Max(0.1, StrengthNm);

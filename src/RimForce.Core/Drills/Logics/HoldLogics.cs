@@ -148,6 +148,7 @@ public sealed class BreakpointLogic : SetLogic
     private double _torqueAtSlip;
     private double? _breakpoint;
     private bool _estimated;
+    private bool _lowerBound;
     private bool _enduranceMode;
     private double _enduranceStart;
     private double _enduranceNm;
@@ -206,7 +207,7 @@ public sealed class BreakpointLogic : SetLogic
             }
             else if (!_enduranceMode) _cappedSince = double.NaN;
 
-            if (_enduranceMode && elapsed - _enduranceStart >= MaxEnduranceS) Conclude(elapsed);
+            if (_enduranceMode && elapsed - _enduranceStart >= MaxEnduranceS) { _lowerBound = true; Conclude(elapsed); }
         }
 
         return new SetFrame(_finished ? 0 : -C.Dir * wanted, 0, 0, EndNow: _finished);
@@ -263,6 +264,8 @@ public sealed class BreakpointLogic : SetLogic
         double bp = _breakpoint ?? Math.Round(_bestHeld, 2);
         m["breakpointNm"] = bp;
         m["estimated"] = _estimated ? 1 : 0;
+        // Still holding when the time limit ended the test: the estimate is a minimum ("≥").
+        m["lowerBound"] = _lowerBound ? 1 : 0;
         m["capNm"] = Math.Round(_enduranceNm, 2);
         m["valid"] = _breakpoint != null ? 1 : 0;
         return (bp, m);
