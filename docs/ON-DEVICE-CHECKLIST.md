@@ -42,7 +42,8 @@ Settings → keep the cap at 40 %.
 1. Drills → **Free Ride**, Resistance = *Constant*, load 30 %, Load drill → Arm & start. When the force has ramped in, **let go of the wheel**.
    - ✍️ Did it stop by itself within a fraction of a second with "Hands off detected"? How far did the wheel move?
 2. Arm & start again, then **Alt-Tab** to another window.
-   - ✍️ Did force stop immediately ("App lost focus")?
+   - ✍️ Did force stop immediately ("App lost focus to …")? Which program did the message name?
+   - If unrelated programs keep stealing focus, use **Keep running in background (like iRacing)** on the stop panel, then check that **Pause/Break** stops the wheel while another window is focused.
 3. Arm & start again, press **Space**.
    - ✍️ Immediate stop?
 4. (Optional) Arm a Corner Hold and turn towards the lock.

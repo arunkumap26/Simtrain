@@ -126,7 +126,7 @@ export function Train({ go }: { go: (p: string) => void }) {
           {phase === 'setdone' && s.last && <SetDoneSplash s={s} />}
           {phase === 'rest' && <RestPanel s={s} left={phaseLeft} />}
           {phase === 'complete' && <CompletePanel s={s} go={go} />}
-          {tripped && <TripPanel message={t?.tripMessage ?? 'Safety stop'} />}
+          {tripped && <TripPanel message={t?.tripMessage ?? 'Safety stop'} code={t?.tripCode} />}
           {st.demo && phase !== 'ready' && phase !== 'paused' && phase !== 'complete' && <DemoPanel />}
         </div>
         <div className="card tight" style={{ height: 128, padding: 8 }}><TelemetryTrace /></div>
@@ -288,7 +288,9 @@ function CompletePanel({ s, go }: { s: SessionSnap; go: (p: string) => void }) {
   );
 }
 
-export function TripPanel({ message }: { message: string }) {
+export function TripPanel({ message, code }: { message: string; code?: string | null }) {
+  const focus = code === 'FocusLost';
+  const keepRunning = () => send('setFocusMode', { mode: 'background' }).then(() => send('ackTrip'));
   return (
     <div className="overlay" style={{ zIndex: 30 }}>
       <div className="panel trip-panel fade-in">
@@ -296,7 +298,16 @@ export function TripPanel({ message }: { message: string }) {
         <div className="head" style={{ fontSize: 34, fontWeight: 800, color: '#fb7185' }}>Safety stop</div>
         <div style={{ fontSize: 18, margin: '8px 0 18px' }}>{message}</div>
         <div className="muted" style={{ fontSize: 13, marginBottom: 16 }}>All force is off. Hands back on the wheel, centre it, then acknowledge.</div>
-        <button className="btn primary" onClick={() => send('ackTrip')}>Acknowledge</button>
+        <div className="row" style={{ justifyContent: 'center' }}>
+          <button className="btn primary" onClick={() => send('ackTrip')}>Acknowledge</button>
+          {focus && <button className="btn" onClick={keepRunning}>Keep running in background (like iRacing)</button>}
+        </div>
+        {focus && (
+          <div className="dim" style={{ fontSize: 12, marginTop: 14, lineHeight: 1.5 }}>
+            Background mode ignores other windows taking focus. Hands-off, runaway, lock and watchdog stops still apply,
+            and <b>Pause/Break</b> or a wheel button bound to STOP (Settings) stops the wheel from anywhere.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -117,6 +117,26 @@ public class AppControllerTests : IDisposable
     }
 
     [Fact]
+    public void BackgroundFocusModeKeepsRunningWhenFocusIsLost()
+    {
+        Assert.True(Cmd("setFocusMode", new { mode = "background" })["ok"]!.GetValue<bool>());
+        Assert.Equal("background", _app.Settings.CooperativeLevel);
+        Assert.False(_app.Settings.Safety.StopOnFocusLoss);
+        var cfg = new { drillId = "corner-hold", loadPct = 40, sets = 1, workS = 30, restS = 0, hand = "Both", direction = "Right", @params = new { angle = 0 } };
+        Cmd("startDrill", new { config = cfg });
+        Run(1);
+        Cmd("go");
+        Run(6);
+        _app.Engine.SetFocus(false, "Discord.exe");
+        Run(0.2);
+        Assert.Equal(SafetyState.Armed, _app.Engine.Governor.State);
+        // and strict mode restores the stop
+        Cmd("setFocusMode", new { mode = "strict" });
+        _app.Engine.SetFocus(false, "Discord.exe");
+        Assert.Equal(TripCode.FocusLost, _app.Engine.Governor.LastTrip);
+    }
+
+    [Fact]
     public void ProgramGenerationAndStart()
     {
         Assert.True(Cmd("generateProgram", new { sessionsPerWeek = 2 })["ok"]!.GetValue<bool>());

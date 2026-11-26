@@ -449,6 +449,26 @@ public sealed class AppController : IDisposable
                 return null;
             }
 
+            case "setFocusMode":
+            {
+                // "strict": stop when RimForce loses focus, DirectInput Foreground (Windows releases the wheel too).
+                // "background": like iRacing — DirectInput Background, focus changes are not a fault. Global STOP
+                // (Pause/Break, bound wheel button) and every other safety rule still apply.
+                string mode = Arg(args, "mode", "strict");
+                bool background = mode == "background";
+                var s = _settings with
+                {
+                    CooperativeLevel = background ? "background" : "foreground",
+                    Safety = _settings.Safety with { StopOnFocusLoss = !background },
+                };
+                bool reopen = !IsSim && _deviceId != null && s.CooperativeLevel != _settings.CooperativeLevel;
+                OnLoop(() => { if (Engine.Governor.State == SafetyState.Armed && reopen) Engine.Stop("Focus mode changed"); });
+                SaveSettings(s);
+                if (reopen) { try { SelectDevice(_deviceId!); } catch { } }
+                BroadcastState();
+                return new { mode = background ? "background" : "strict" };
+            }
+
             case "generateProgram":
             {
                 int per = Arg(args, "sessionsPerWeek", _settings.SessionsPerWeek);

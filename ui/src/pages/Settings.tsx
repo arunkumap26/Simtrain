@@ -46,7 +46,11 @@ export function SettingsPage() {
             <Slider label="Runaway speed (motor winning)" value={sf.runawaySpeedDps} min={90} max={sf.handsOffSpeedDps} step={10} unit="°/s" onChange={(v) => setSf({ runawaySpeedDps: v })} />
             <Slider label="Stop near lock" value={sf.lockMarginDeg} min={10} max={90} step={5} unit="°" onChange={(v) => setSf({ lockMarginDeg: v })} />
             <Toggle on={sf.runawayDetection} onChange={(v) => setSf({ runawayDetection: v })} label="Runaway detection" hint="Stops when the motor is spinning the wheel on its own." />
-            <Toggle on={sf.stopOnFocusLoss} onChange={(v) => setSf({ stopOnFocusLoss: v })} label="Stop when RimForce loses focus" />
+            <div className="field"><label>When another window takes focus</label>
+              <Seg value={sf.stopOnFocusLoss && s.cooperativeLevel === 'foreground' ? 'strict' : 'background'}
+                onChange={(v) => setS({ ...s, cooperativeLevel: v === 'strict' ? 'foreground' : 'background', safety: { ...sf, stopOnFocusLoss: v === 'strict' } })}
+                options={[{ value: 'strict', label: 'Stop (strict)' }, { value: 'background', label: 'Keep running (like iRacing)' }]} />
+              <span className="dim" style={{ fontSize: 12 }}>Keep running = DirectInput background mode. Pause/Break and a wheel button bound to STOP work from any window.</span></div>
             <Toggle on={sf.finiteEffectDurations} onChange={(v) => setSf({ finiteEffectDurations: v })} label="Effect lapse safety (experimental)" hint="Finite 250 ms effects restarted every 100 ms so a frozen app lets force lapse. May pulse on Simagic — test on the Device page." />
           </div>
         </Card>

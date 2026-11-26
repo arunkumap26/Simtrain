@@ -28,6 +28,11 @@ internal sealed class MainForm : Form
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint hwnd, out uint pid);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(nint hwnd, System.Text.StringBuilder text, int max);
     [DllImport("user32.dll")] private static extern nint GetAncestor(nint hwnd, uint flags);
+    [DllImport("user32.dll")] private static extern bool RegisterHotKey(nint hwnd, int id, uint mods, uint vk);
+    [DllImport("user32.dll")] private static extern bool UnregisterHotKey(nint hwnd, int id);
+    private const int WM_HOTKEY = 0x0312;
+    private const int StopHotkeyId = 0x5246;
+    private const uint VK_PAUSE = 0x13, MOD_NOREPEAT = 0x4000;
     private const int WM_ACTIVATE = 0x0006;
     private const int WA_INACTIVE = 0;
 
@@ -64,6 +69,8 @@ internal sealed class MainForm : Form
         base.OnHandleCreated(e);
         _hwnd = Handle;
         try { int on = 1; DwmSetWindowAttribute(Handle, 20, ref on, sizeof(int)); } catch { } // dark title bar
+        // Global STOP: Pause/Break stops all force even when another window has focus.
+        try { if (!RegisterHotKey(Handle, StopHotkeyId, MOD_NOREPEAT, VK_PAUSE)) Log.Write("Could not register the Pause/Break STOP hotkey (another app owns it)"); } catch { }
     }
 
     protected override async void OnLoad(EventArgs e)
@@ -112,7 +119,10 @@ internal sealed class MainForm : Form
         try
         {
             var web = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.FromArgb(7, 10, 15) };
-            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Program.DataDir, "WebView2"));
+            var options = new CoreWebView2EnvironmentOptions(
+                "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows " +
+                "--disable-features=IntensiveWakeUpThrottling,CalculateNativeWinOcclusion");
+            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Program.DataDir, "WebView2"), options);
             Controls.Add(web);
             await web.EnsureCoreWebView2Async(env);
             web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
@@ -151,6 +161,11 @@ internal sealed class MainForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == WM_HOTKEY && m.WParam.ToInt64() == StopHotkeyId)
+        {
+            _app?.Engine.Stop("Pause/Break STOP");
+            Log.Write("Global STOP hotkey");
+        }
         // WM_ACTIVATE with WA_INACTIVE: lParam is the window being activated (may be 0).
         if (m.Msg == WM_ACTIVATE && (m.WParam.ToInt64() & 0xFFFF) == WA_INACTIVE)
         {
@@ -217,6 +232,7 @@ internal sealed class MainForm : Form
     protected override async void OnFormClosing(FormClosingEventArgs e)
     {
         try { _app?.Engine.Stop("Closing"); } catch { }
+        try { UnregisterHotKey(Handle, StopHotkeyId); } catch { }
         base.OnFormClosing(e);
         try { if (_server != null) await _server.DisposeAsync(); } catch { }
         try { _app?.Dispose(); } catch { }

@@ -92,7 +92,7 @@ Every set is scored and logged (time in zone, error, steadiness, impulse N·m·s
 
 All force passes through one `SafetyGovernor` (tests in `tests/RimForce.Tests/SafetyGovernorTests.cs`):
 
-1. No force until **Arm & start**; Space / Esc / STOP, focus loss, any device error or disconnect → immediate stop.
+1. No force until **Arm & start**; Space / Esc / STOP, **Pause/Break (global, from any window)**, focus loss (strict mode — or keep running in the background like iRacing), any device error or disconnect → immediate stop.
 2. Global cap (40 % default, ≤ 100 %) and per-drill caps.
 3. Soft start ≥ 1.5 s, soft end 0.3 s, open-loop changes no faster than full cap in 80 ms.
 4. Hands-off: > 400 °/s for > 50 ms with force on → stop. Plus runaway detection (motor spinning the wheel > 180 °/s) and an overspeed fade.
