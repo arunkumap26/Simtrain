@@ -77,7 +77,7 @@ export function Home({ go }: { go: (p: any) => void }) {
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <Card title="Breakpoint">
+          <Card title="Breakpoint" right={<button className="btn small" onClick={() => go('max')}>Test my max →</button>}>
             {bpR || bpL ? (
               <div className="row" style={{ gap: 16 }}>
                 <div className="kpi"><span className="l">Push right</span><span className="v">{bpR ? bpR.toFixed(1) : '—'}<span className="u">Nm</span></span></div>

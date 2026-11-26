@@ -644,6 +644,7 @@ public sealed class AppController : IDisposable
                 sim.Driver.Mode = mode switch { "manual" => DriverMode.Manual, "off" => DriverMode.HandsOff, _ => DriverMode.FollowGuide };
                 if (args.ContainsKey("target")) sim.Driver.ManualTargetDeg = Arg(args, "target", 0.0);
                 if (args.ContainsKey("strength")) sim.Driver.StrengthNm = Math.Clamp(Arg(args, "strength", 9.0), 1, 40);
+                if (args.ContainsKey("refSpeed")) sim.Driver.MaxRefSpeedDps = Math.Clamp(Arg(args, "refSpeed", 300.0), 50, 5000);
                 sim.Driver.ReleaseAtTime = null;
                 return null;
             }

@@ -5,6 +5,7 @@ import { NavIcon } from './components/Icons';
 import { Device } from './pages/Device';
 import { Drills } from './pages/Drills';
 import { Home } from './pages/Home';
+import { MaxTest } from './pages/MaxTest';
 import { Onboarding } from './pages/Onboarding';
 import { ProgramPage } from './pages/Program';
 import { Progress } from './pages/Progress';
@@ -12,7 +13,7 @@ import { SettingsPage } from './pages/Settings';
 import { Train } from './pages/Train';
 
 const PAGES = [
-  ['home', 'Home'], ['train', 'Train'], ['drills', 'Drills'], ['program', 'Program'], ['progress', 'Progress'], ['device', 'Device'], ['settings', 'Settings'],
+  ['home', 'Home'], ['train', 'Train'], ['drills', 'Drills'], ['program', 'Program'], ['max', 'Max'], ['progress', 'Progress'], ['device', 'Device'], ['settings', 'Settings'],
 ] as const;
 export type PageId = (typeof PAGES)[number][0];
 
@@ -50,6 +51,8 @@ export function App() {
         break;
       case 'phase': if (data.phase === 'rest') say('Rest'); break;
       case 'rep': sfx.rep(); break;
+      case 'go': sfx.go(); say('Go'); break;
+      case 'rung': say(`${Number(data.nm).toFixed(0)} newton metres`); break;
       case 'pulse': sfx.pulse(); break;
       case 'catch': data.ok ? sfx.good() : sfx.miss(); break;
       case 'apex': sfx.good(); break;
@@ -119,6 +122,7 @@ export function App() {
         {page === 'train' && <Train go={(p) => setPage(p as PageId)} />}
         {page === 'drills' && <Drills go={setPage} />}
         {page === 'program' && <ProgramPage go={setPage} />}
+        {page === 'max' && <MaxTest go={setPage} />}
         {page === 'progress' && <Progress />}
         {page === 'device' && <Device />}
         {page === 'settings' && <SettingsPage />}

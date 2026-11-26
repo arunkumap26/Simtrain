@@ -59,6 +59,16 @@ Resistance is layered like a sim game on top of the wheelbase:
 
 Past the motor's limit you still progress: one-hand work, weaker grips (open hand / fingertips / pinch), longer holds and less rest. The 8-week program switches to longer work time automatically when a load would exceed the cap, and the Breakpoint Test switches to hold-to-failure + Rohmert's endurance curve when you're stronger than the cap.
 
+## Max Strength Test — your strength beyond the wheel
+
+The **Max** page measures how strong you really are, even though the motor stops at ~12 Nm:
+
+- **Speed–strength (load–velocity) profile** — the main test. At 5 loads up to the motor's max you turn as fast as you can; heavier loads make you slower in a near-straight line. Extending that line to zero speed estimates your **maximum torque**, plus peak power and top speed. It's the same idea gyms use to predict a 1-rep max without maximal lifts.
+- **One arm at a time** (default): right/left arm × **lift** (shoulder flexion) and **press** (shoulder extension). A single arm stays in the range a 12 Nm motor can measure accurately, and the results convert to hand force and shoulder moment (% of typical). Two-handed turning max ≈ right press + left lift (turning right) and vice versa.
+- Optional: two-handed profiles, a **hold at full power until failure** (estimate from Rohmert's endurance curve), and a **push-through ladder** (concentric 1-rep max up to the motor limit).
+- Each estimate is graded high / medium / low **confidence** by how far it extrapolates beyond your hardest rep — the simulator shows it's accurate within ~2% for an arm up to ~1.6× the motor and unreliable at 2.5×+, which is why one-arm tests are the default.
+- **Full power for this test**: after an explicit "I'm braced" confirmation the cap is 100 % of the device *for that session only*; every other safety stop stays on.
+
 ## Training modes
 
 | Drill | Resistance | Trains | What you do |

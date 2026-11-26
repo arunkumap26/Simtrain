@@ -18,7 +18,8 @@ public sealed class SpeedStrengthLogic : SetLogic
 {
     private enum Stage { Load, Ready, Push, Return, Rest, Done }
 
-    private const double LoadRateNmPerS = 4.0, ReadyS = 1.1, StartTimeoutS = 2.5, PushTimeoutS = 3.0, ReturnS = 2.0, RestS = 6.0;
+    private const double LoadRateNmPerS = 4.0, ReadyS = 1.1, StartTimeoutS = 2.5, PushTimeoutS = 3.0, ReturnS = 2.5, RestS = 6.0;
+    private double _returnFrom;
     /// <summary>Above this push speed a progressive brake is added so the wheel never gets dangerously fast.</summary>
     public const double BrakeFromDps = 550, BrakeNmPerDps = 0.04, BrakeMaxNm = 8;
 
@@ -126,6 +127,7 @@ public sealed class SpeedStrengthLogic : SetLogic
                         _reps.Add(new Rep(_level, meanNm, meanDps, _peakV));
                         Emit("rep", new { reps = _reps.Count, dps = Math.Round(meanDps), nm = Math.Round(meanNm, 1) });
                         Enter(Stage.Return, elapsed);
+                        _returnFrom = Math.Max(_range, pos); // you usually overshoot the marker: come back from where you are
                     }
                     else if (dt > PushTimeoutS || pos < -8) Fail(elapsed);
                 }
@@ -133,9 +135,13 @@ public sealed class SpeedStrengthLogic : SetLogic
             }
             case Stage.Return:
             {
+                // Drop the pull to 30% straight away (a full-load pull plus a quick return looks like a runaway),
+                // then ease back from wherever you stopped.
+                double drop = Math.Clamp(inStage / 0.3, 0, 1);
                 double f = Math.Clamp(inStage / ReturnS, 0, 1);
-                torque = _level * (1 - 0.75 * f);
-                target = dir * _range * (1 - f);
+                double ease = f * f * (3 - 2 * f);
+                torque = _level * (drop < 1 ? 1 - 0.7 * drop : 0.3 - 0.15 * f);
+                target = dir * _returnFrom * (1 - ease);
                 if (inStage >= ReturnS) Enter(Stage.Rest, elapsed);
                 break;
             }
@@ -183,7 +189,7 @@ public sealed class SpeedStrengthLogic : SetLogic
         double target = _stage switch
         {
             Stage.Push => dir * _range,
-            Stage.Return => dir * _range * (1 - Math.Clamp(inStage / ReturnS, 0, 1)),
+            Stage.Return => dir * _returnFrom * (1 - SmoothStep(Math.Clamp(inStage / ReturnS, 0, 1))),
             _ => 0,
         };
         var last = _reps.Count > 0 ? _reps[^1] : (Rep?)null;
@@ -199,8 +205,12 @@ public sealed class SpeedStrengthLogic : SetLogic
             RepProgress = Math.Clamp((_li * _repsPerLoad + _rep) / (double)Math.Max(1, _loadsPct.Length * _repsPerLoad), 0, 1),
             MarkerRight = dir > 0 ? _range : null,
             MarkerLeft = dir < 0 ? -_range : null,
+            Hand = C.Hand == Hand.Both ? null : (C.Hand == Hand.Left ? "LEFT · 9 o'clock" : "RIGHT · 3 o'clock"),
+            Action = Cues.OneHandAction(C.Hand, dir),
         };
     }
+
+    private static double SmoothStep(double f) => f * f * (3 - 2 * f);
 
     public override Dictionary<string, double> Live()
     {

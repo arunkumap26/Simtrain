@@ -111,7 +111,8 @@ export function ForceMeter({ rimDiameterMm }: { rimDiameterMm: number }) {
     if (tq > peak.current.v || now - peak.current.t > 2500) peak.current = { v: tq, t: now };
     const cap = t?.globalCapNm ?? 4.8;
     const maxDev = t?.maxTorqueNm ?? 12;
-    const load = s?.loadNm ?? 0;
+    const isTest = s?.drill.category === 'Test';
+    const load = isTest ? (s?.live?.fvLoadNm ?? s?.live?.rungNm ?? s?.live?.rampNm ?? 0) : (s?.loadNm ?? 0);
     const ref = s?.refIsBreakpoint ? s.refMaxNm ?? null : null;
     const scale = Math.max(cap * 1.08, (ref ?? 0) * 1.08, load * 1.25, 2);
 
@@ -156,7 +157,7 @@ export function ForceMeter({ rimDiameterMm }: { rimDiameterMm: number }) {
     };
     mark(cap, 'CAP', '#f43f5e', [4, 4]);
     if (ref) mark(ref, 'YOUR MAX', '#a78bfa');
-    if (load > 0) mark(load, 'TARGET', '#f8fafc', [6, 4]);
+    if (load > 0 && !(ref && Math.abs(load - ref) < scale * 0.06)) mark(load, isTest ? 'LOAD' : 'TARGET', '#f8fafc', [6, 4]);
     void maxDev; void rimDiameterMm;
   });
   return <canvas ref={ref} style={{ width: '100%', height: '100%' }} />;

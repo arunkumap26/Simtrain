@@ -19,8 +19,58 @@ public static class DemoSeeder
 {
     public static void Seed(string dbPath, int sessions = 12)
     {
+        SeedProgram(dbPath, sessions);
+        SeedMaxTest(dbPath);
+    }
+
+    /// <summary>A Max Strength Test run through the real test logic, one simulated arm strength per test.</summary>
+    public static void SeedMaxTest(string dbPath)
+    {
         using var repo = new Repository(dbPath);
-        if (repo.RecentSessions(1).Count > 0) { Console.WriteLine("Seed: database already has sessions, skipping."); return; }
+        if (repo.RecentSessions(100).Any(x => x.ProgramRef == "maxtest")) return;
+        var profile = new WheelProfile();
+        var arms = new (string id, double strength)[]
+        {
+            ("profile-right-lift", 10.5), ("profile-left-lift", 9.6), ("profile-right-press", 13.2), ("profile-left-press", 12.1),
+        };
+        var when = DateTime.UtcNow.AddHours(-2);
+        long sid = repo.StartSession("Max Strength Test", "maxtest", when);
+        double offset = 0;
+        foreach (var (id, strength) in arms)
+        {
+            var (drill, hand, dir, _) = RimForce.Core.App.AppController.MaxTestItems[id];
+            var clock = new ManualClock();
+            var sim = new SimulatedForceDevice(clock, profile);
+            sim.Connect();
+            sim.Driver.StrengthNm = strength;
+            sim.Driver.MaxRefSpeedDps = 4000;
+            sim.Driver.FatigueRate = 0;
+            var engine = new TrainingEngine(sim, clock, profile, new SafetySettings { GlobalCapPct = 100 });
+            engine.Governor.ChecklistAccepted = true;
+            engine.Governor.RequireDirectionCheck = false;
+            var cfg = DrillCatalog.DefaultConfig(drill) with { Hand = hand, Direction = dir, Role = "Test" };
+            var runner = new SessionRunner(SessionPlan.Single(cfg), profile, new ReferenceStrength(), 11);
+            engine.SetActivity(runner);
+            void Step(double sec) { int n = (int)(sec * 360); for (int i = 0; i < n; i++) { clock.Advance(1.0 / 360); engine.Heartbeat(); engine.Tick(); } }
+            Step(1);
+            engine.Arm(out _);
+            runner.Start();
+            double g = 0;
+            while (!runner.IsFinished && runner.Phase != SessionPhase.Paused && g < 400) { Step(0.25); g += 0.25; }
+            foreach (var r in runner.Results)
+            {
+                repo.SaveSet(sid, r with { StartedUtc = when.AddSeconds(offset), EndedUtc = when.AddSeconds(offset + r.WorkS) });
+                offset += r.WorkS + 90;
+                Console.WriteLine($"Seed max: {id} true {strength} Nm -> est {r.Score} Nm (confidence {r.Metrics.GetValueOrDefault("confidence")})");
+            }
+        }
+        repo.EndSession(sid, new { seeded = true }, when.AddSeconds(offset));
+    }
+
+    private static void SeedProgram(string dbPath, int sessions)
+    {
+        using var repo = new Repository(dbPath);
+        if (repo.RecentSessions(1).Count > 0) { Console.WriteLine("Seed: database already has sessions, skipping program."); return; }
 
         var profile = new WheelProfile();
         var program = ProgramGenerator.Generate(3, needsBaseline: true);

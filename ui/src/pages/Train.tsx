@@ -45,6 +45,17 @@ export const METRIC_META: Record<string, { label: string; unit?: string; d?: num
   laps: { label: 'Laps', d: 0 },
   bestLapAccPct: { label: 'Best lap', unit: '%', d: 0 },
   fadePct: { label: 'Fade', unit: '%', d: 0 },
+  fvLoadNm: { label: 'Load', unit: 'Nm', d: 1 },
+  fvReps: { label: 'Reps done', d: 0 },
+  fvLastDps: { label: 'Last speed', unit: '°/s', d: 0 },
+  t0Nm: { label: 'Est. max', unit: 'Nm', d: 1 },
+  rung: { label: 'Rung', d: 0 },
+  rungNm: { label: 'Rung load', unit: 'Nm', d: 1 },
+  bestPushNm: { label: 'Best push', unit: 'Nm', d: 1 },
+  maxPushNm: { label: 'Max push', unit: 'Nm', d: 1 },
+  v0Dps: { label: 'Top speed', unit: '°/s', d: 0 },
+  pmaxW: { label: 'Peak power', unit: 'W', d: 0 },
+  r2: { label: 'Fit R²', d: 2 },
 };
 
 const sessionOf = (t: Tick | null) => (t?.activity && (t.activity as any).kind === 'session' ? (t.activity as SessionSnap) : null);
@@ -67,7 +78,10 @@ export function Train({ go }: { go: (p: string) => void }) {
   const err = g ? (t?.angleDeg ?? 0) - g.targetDeg : 0;
   const inZone = !!g && g.showGhost && Math.abs(err) <= (g.zoneDeg || 0);
   const cueColor = phase === 'countdown' ? '#f8fafc' : phase !== 'work' ? '#94a3b8' : g?.showGhost ? (inZone ? '#34d399' : '#fbbf24') : accent;
-  const handTxt = s.hand && s.hand !== 'both' ? `${s.hand.toUpperCase()} HAND` : 'BOTH HANDS';
+  const isTest = s.drill.category === 'Test';
+  const testLoad = s.live?.fvLoadNm ?? s.live?.rungNm ?? s.live?.rampNm;
+  const action = g?.action && s.hand && s.hand !== 'both' ? ` · ${g.action.toUpperCase()}` : '';
+  const handTxt = s.hand && s.hand !== 'both' ? `${s.hand.toUpperCase()} ARM${action}` : 'BOTH HANDS';
   const strength = t?.strength;
   const f = force(strength?.rimForceKgf ?? 0, unit);
   const fh = force(strength?.perHandKgf ?? 0, unit);
@@ -85,9 +99,11 @@ export function Train({ go }: { go: (p: string) => void }) {
           <span className="chip" style={{ borderColor: accent, color: accent }}>{s.role}</span>
           <span className="chip">DRILL {s.itemIndex + 1}/{s.itemCount}</span>
           <span className="chip">{handTxt}</span>
-          {s.dir && s.drill.id !== 'lock-to-lock' && s.drill.id !== 'apex-hunter' && s.drill.id !== 'stint' && <span className="chip">PUSH {s.dir.toUpperCase()}</span>}
+          {s.dir && !action && s.drill.id !== 'lock-to-lock' && s.drill.id !== 'apex-hunter' && s.drill.id !== 'stint' && <span className="chip">TURN {s.dir.toUpperCase()}</span>}
           {g?.grip && <span className="chip" style={{ color: '#a78bfa' }}>{g.grip}</span>}
-          <span className="chip mono">{s.loadNm.toFixed(1)} Nm · {s.loadPct.toFixed(0)}% {s.refIsBreakpoint ? 'of max' : 'of base'}</span>
+          {isTest
+            ? <span className="chip mono" style={{ color: '#fb7185' }}>TEST LOAD {testLoad != null ? `${testLoad.toFixed(1)} Nm` : '—'}</span>
+            : <span className="chip mono">{s.loadNm.toFixed(1)} Nm · {s.loadPct.toFixed(0)}% {s.refIsBreakpoint ? 'of max' : 'of base'}</span>}
         </div>
         <div className="spacer" />
         <SetDots s={s} accent={accent} />
@@ -146,7 +162,7 @@ export function Train({ go }: { go: (p: string) => void }) {
       </div>
 
       {/* ---------- intensity ---------- */}
-      <IntensityBar s={s} t={t} rim={rim} go={go} />
+      <IntensityBar s={s} t={t} rim={rim} go={go} testLoad={isTest ? testLoad ?? 0 : undefined} />
     </div>
   );
 }
@@ -353,7 +369,7 @@ function LiveMetrics({ s, t, rimMm }: { s: SessionSnap; t: Tick | null; rimMm: n
   );
 }
 
-function IntensityBar({ s, t, rim, go }: { s: SessionSnap; t: Tick | null; rim: number; go: (p: string) => void }) {
+function IntensityBar({ s, t, rim, go, testLoad }: { s: SessionSnap; t: Tick | null; rim: number; go: (p: string) => void; testLoad?: number }) {
   const intensity = t?.intensity ?? 1;
   const [drag, setDrag] = useState<number | null>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -380,10 +396,17 @@ function IntensityBar({ s, t, rim, go }: { s: SessionSnap; t: Tick | null; rim: 
         </div>
       </div>
       <button className="btn" style={{ width: 52, height: 52, fontSize: 26 }} onClick={() => set(Math.min(1.5, +(value + 0.05).toFixed(2)))}>+</button>
+      {testLoad != null ? (
+        <div className="col" style={{ gap: 2, minWidth: 220 }}>
+          <span className="mono" style={{ fontSize: 20 }}>{testLoad.toFixed(1)} Nm <span className="dim" style={{ fontSize: 13 }}>test load</span></span>
+          <span className="dim" style={{ fontSize: 12 }}>Tests set their own loads — Resistance % doesn't apply.</span>
+        </div>
+      ) : (
       <div className="col" style={{ gap: 2, minWidth: 220 }}>
         <span className="mono" style={{ fontSize: 20 }}>{s.loadNm.toFixed(1)} Nm <span className="dim" style={{ fontSize: 13 }}>→ {perHand.toFixed(1)} kgf/hand</span></span>
         <span className="dim" style={{ fontSize: 12 }}>{capHit ? <span style={{ color: '#fbbf24' }}>At safety cap ({(t?.globalCapNm ?? 0).toFixed(1)} Nm) — raise it in Settings</span> : <>on top of SimPro · <span className="kbd">↑</span> <span className="kbd">↓</span> or wheel buttons</>}</span>
       </div>
+      )}
       <div className="spacer" />
       {s.phase === 'rest' && <button className="btn" onClick={() => send('next')}>Skip rest <span className="kbd">Enter</span></button>}
       <button className="btn ghost" onClick={() => { send('endSession'); go('home'); }}>End session</button>
