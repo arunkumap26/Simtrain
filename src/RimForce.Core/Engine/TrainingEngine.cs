@@ -123,10 +123,11 @@ public sealed class TrainingEngine
 
     public void Heartbeat() => Volatile.Write(ref _uiHeartbeat, _clock.Now);
 
-    public void SetFocus(bool focused)
+    /// <param name="lostTo">Optional description of the window that took focus ("Discord.exe — Discord"), shown in the stop message.</param>
+    public void SetFocus(bool focused, string? lostTo = null)
     {
         if (!focused && Governor.Settings.StopOnFocusLoss && Governor.State == SafetyState.Armed)
-            Trip(TripCode.FocusLost, "App lost focus");
+            Trip(TripCode.FocusLost, string.IsNullOrWhiteSpace(lostTo) ? "App lost focus" : $"App lost focus to {lostTo}");
     }
 
     // ---------------- loop-thread API (call via Post when on another thread) ----------------

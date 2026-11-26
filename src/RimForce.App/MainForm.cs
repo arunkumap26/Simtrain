@@ -24,6 +24,12 @@ internal sealed class MainForm : Form
     private readonly Label _status;
 
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
+    [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint hwnd, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(nint hwnd, System.Text.StringBuilder text, int max);
+    [DllImport("user32.dll")] private static extern nint GetAncestor(nint hwnd, uint flags);
+    private const int WM_ACTIVATE = 0x0006;
+    private const int WA_INACTIVE = 0;
 
     public MainForm(bool demo, bool forceBrowser)
     {
@@ -118,7 +124,7 @@ internal sealed class MainForm : Form
                 Log.Write("WebView2 process failed: " + a.ProcessFailedKind);
                 _app?.Engine.Trip(RimForce.Core.Safety.TripCode.UiHeartbeat, "UI process crashed");
             };
-            web.Source = new Uri(_server!.AppUrl);
+            web.Source = new Uri(_server!.AppUrl + "&shell=webview2");
             Controls.Remove(_status);
             web.BringToFront();
             _web = web;
@@ -143,11 +149,63 @@ internal sealed class MainForm : Form
         _app?.Engine.SetFocus(true);
     }
 
-    protected override void OnDeactivate(EventArgs e)
+    protected override void WndProc(ref Message m)
     {
-        base.OnDeactivate(e);
+        // WM_ACTIVATE with WA_INACTIVE: lParam is the window being activated (may be 0).
+        if (m.Msg == WM_ACTIVATE && (m.WParam.ToInt64() & 0xFFFF) == WA_INACTIVE)
+        {
+            try { OnLostActivation(m.LParam); } catch (Exception ex) { Log.Write("Focus check failed: " + ex.Message); _app?.Engine.SetFocus(false); }
+        }
+        base.WndProc(ref m);
+    }
+
+    /// <summary>
+    /// The window stopped being the active window. If the window taking over belongs to RimForce itself (its own
+    /// process or the WebView2 browser processes that render the UI — e.g. a dropdown or tooltip popup), it is not
+    /// a real focus loss. Anything else stops the wheel and is named in the safety message and the log.
+    /// </summary>
+    private void OnLostActivation(nint activated)
+    {
         // In browser mode this window is not the UI; the page reports its own focus instead.
-        if (_web != null) _app?.Engine.SetFocus(false);
+        if (_web == null) return;
+        nint target = activated != 0 ? activated : GetForegroundWindow();
+        uint pid = 0;
+        if (target != 0) GetWindowThreadProcessId(target, out pid);
+        if (pid != 0 && IsOwnProcess(pid))
+        {
+            Log.Write($"Focus moved to RimForce's own UI process (pid {pid}) — not treated as focus loss");
+            return;
+        }
+        string who = DescribeWindow(target, pid);
+        Log.Write("Focus lost to " + who);
+        _app?.Engine.SetFocus(false, who);
+    }
+
+    private bool IsOwnProcess(uint pid)
+    {
+        if (pid == (uint)Environment.ProcessId) return true;
+        var core = _web?.CoreWebView2;
+        if (core == null) return false;
+        if (pid == core.BrowserProcessId) return true;
+        try
+        {
+            foreach (var p in core.Environment.GetProcessInfos())
+                if ((uint)p.ProcessId == pid) return true;
+        }
+        catch { }
+        return false;
+    }
+
+    private static string DescribeWindow(nint hwnd, uint pid)
+    {
+        if (hwnd == 0 || pid == 0) return "another window";
+        string name = "unknown";
+        try { using var p = Process.GetProcessById((int)pid); name = p.ProcessName + ".exe"; } catch { }
+        var root = GetAncestor(hwnd, 2 /* GA_ROOT */);
+        var sb = new System.Text.StringBuilder(256);
+        GetWindowText(root != 0 ? root : hwnd, sb, sb.Capacity);
+        string title = sb.ToString().Trim();
+        return string.IsNullOrEmpty(title) ? name : $"{name} — \"{(title.Length > 60 ? title[..60] + "…" : title)}\"";
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

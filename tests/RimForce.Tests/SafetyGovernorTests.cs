@@ -396,6 +396,28 @@ public class SafetyGovernorTests
     }
 
     [Fact]
+    public void FocusLossNamesTheWindowThatTookFocus()
+    {
+        var (e, _, c) = Rig.SimEngine();
+        e.SetActivity(new FixedActivity { Request = Want(2) });
+        Rig.Step(e, c, 0.05);
+        Assert.True(e.Arm(out _));
+        Rig.Step(e, c, 0.5);
+        e.SetFocus(false, "Discord.exe — \"Discord\"");
+        Assert.Equal(TripCode.FocusLost, e.Governor.LastTrip);
+        Assert.Contains("Discord.exe", e.Governor.LastTripMessage);
+    }
+
+    [Fact]
+    public void FocusLossWhileDisarmedDoesNothing()
+    {
+        var (e, _, c) = Rig.SimEngine();
+        Rig.Step(e, c, 0.05);
+        e.SetFocus(false, "explorer.exe");
+        Assert.Equal(SafetyState.Disarmed, e.Governor.State);
+    }
+
+    [Fact]
     public void UiHeartbeatTimeoutTrips()
     {
         var clock = new ManualClock();

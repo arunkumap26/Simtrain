@@ -21,7 +21,9 @@ const stateListeners = new Set<Listener>();
 const tickListeners = new Set<Listener>();
 const connListeners = new Set<Listener>();
 
-export const isWebView = !!(window as any).chrome?.webview;
+// Inside the RimForce window the native host reports focus (and ignores its own UI popups); only a plain
+// browser tab reports blur itself.
+export const isWebView = !!(window as any).chrome?.webview || params.get('shell') === 'webview2';
 
 function emit(set: Set<Listener>) { set.forEach((l) => l()); }
 
